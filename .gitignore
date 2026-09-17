@@ -1,0 +1,32 @@
+# ========== Python 运行时/缓存 ==========
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# ========== 虚拟环境 ==========
+.venv/
+venv/
+env/
+ENV/
+
+# ========== 环境变量（含敏感信息） ==========
+.env
+.env.*
+*.local
+
+# ========== 运行时/临时数据 ==========
+chat_history/
+*.log
+logs/
+
+# ========== 系统 & IDE ==========
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
