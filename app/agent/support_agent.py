@@ -4,6 +4,11 @@ from app.tools.RAGSearchTool import RAGSearchTool
 from app.tools.WebSearchTool import WebSearchTool
 from app.tools.DateTimeTool import DateTimeTool
 from app.tools.TerminateTool import TerminateTool
+from app.tools.FileOperationTool import FileOperationTool
+from app.tools.PDFGenerationTool import PDFGenerationTool
+from app.tools.ResourceDownloadTool import ResourceDownloadTool
+from app.tools.TerminalOperationTool import TerminalOperationTool
+from app.tools.WebScrapingTool import WebScrapingTool
 from app.tools.tool_collection import ToolCollection
 from app.prompts import SYSTEM_PROMPT, NEXT_STEP_PROMPT
 
@@ -18,6 +23,11 @@ class SupportAgent(ToolCallAgent):
             RAGSearchTool(),
             AskHumanTool(),
             TerminateTool(),
+            FileOperationTool(),
+            PDFGenerationTool(),
+            ResourceDownloadTool(),
+            TerminalOperationTool(),
+            WebScrapingTool(),
         )
         # 2. 传给父类 → 父类存为 self.available_tools
         super().__init__(tools)
