@@ -33,3 +33,4 @@ PG_CONN_STR = (
     f"@{PG_CONFIG['host']}:{PG_CONFIG['port']}/{PG_CONFIG['database']}"
 )
 SEARCH_API_KEY = os.getenv("SEARCH_API_KEY")
+RABBITMQ_URL = os.getenv("RABBITMQ_URL")
