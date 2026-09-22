@@ -30,3 +30,6 @@ logs/
 Thumbs.db
 .idea/
 .vscode/
+
+# ========== WorkBuddy 工作目录 ==========
+.workbuddy/
