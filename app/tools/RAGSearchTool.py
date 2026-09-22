@@ -1,10 +1,14 @@
 from pydantic import BaseModel, Field
-from app.tools.base_tool import BaseTool
-from app.rag.vector_store import get_vector_store
+
+from app.rag.query_expander import QueryExpander
 from app.rag.query_rewriter import QueryRewriter
+from app.rag.vector_store import get_vector_store
+from app.tools.base_tool import BaseTool
+
 
 class RAGSearchInput(BaseModel):
     query: str = Field(description="搜索关键词或问题")
+
 
 class RAGSearchTool(BaseTool):
     name: str = "knowledge_base"
@@ -12,8 +16,8 @@ class RAGSearchTool(BaseTool):
     parameters: type[BaseModel] = RAGSearchInput
 
     async def execute(self, query: str) -> str:
-        rewriter = QueryRewriter()
-        vs = get_vector_store()
-        rewritten = rewriter.rewrite(query)
-        results = vs.similarity_search(rewritten, k=3)
-        return "\n---\n".join([d.page_content for d in results])
+        vector_store = get_vector_store()
+        expanded = QueryExpander().expand(query, max_queries=4)
+        rewritten = QueryRewriter().rewrite_many(expanded)
+        results = QueryRewriter.multi_query_search(rewritten, vector_store, k=3)
+        return "\n---\n".join(document.page_content for document in results)

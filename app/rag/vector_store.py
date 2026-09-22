@@ -5,9 +5,10 @@ sys.path.append(str(root_path))
 from typing import List
 import dashscope
 from langchain_community.document_loaders import TextLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.embeddings.base import Embeddings
 from app.config import DASHSCOPE_API_KEY,PG_CONN_STR
+from app.rag.keyword_enricher import MyKeywordEnricher
+from app.rag.token_text_splitter import MyTokenTextSplitter
 from langchain_postgres import PGVector
 
 
@@ -42,11 +43,8 @@ class DashScopeEmbedding(Embeddings):
 DOC_DIR=Path(__file__).parent/"docs"
 MD_SUFIX="*.md"
 
-text_splitter=RecursiveCharacterTextSplitter(
-  chunk_size=800,
-  chunk_overlap=120,
-  separators=["\n\n", "\n", "。", "，", " "]
-)
+text_splitter=MyTokenTextSplitter(chunk_size=400, chunk_overlap=60)
+keyword_enricher=MyKeywordEnricher()
 
 # 1.加载全部md文件
 def load_all_markdown():
@@ -58,6 +56,9 @@ def load_all_markdown():
       raw_docs=loader.load()
       #2.切分
       split_docs=text_splitter.split_documents(raw_docs)
+      for document in split_docs:
+        keywords = keyword_enricher.extract_keywords(document.page_content)
+        document.metadata["keywords"] = keywords
       all_docs.extend(split_docs)
   print(f"总共加载并切割完成 {len(all_docs)} 段文本")
   return all_docs

@@ -1,29 +1,50 @@
 from langchain_community.chat_models import ChatTongyi
-from app.config import LLM_MODEL_NAME
+
+from app.config import DASHSCOPE_API_KEY, LLM_MODEL_NAME
+from app.rag.query_expander import QueryExpander
+from app.rag.rewrite_transformer import RewriteTransformer
+
 
 class QueryRewriter:
-    def __init__(self):
-        self.llm = ChatTongyi(model=LLM_MODEL_NAME)
+    def __init__(self, llm=None):
+        self.llm = llm
+        if self.llm is None and DASHSCOPE_API_KEY:
+            try:
+                self.llm = ChatTongyi(model=LLM_MODEL_NAME)
+            except Exception:
+                self.llm = None
+        self.transformer = RewriteTransformer(llm=self.llm)
+        self.expander = QueryExpander()
 
     def rewrite(self, query: str) -> str:
-        """把用户问题改写成更适合检索的关键词"""
-        prompt = f"""你是一个智能客服系统的查询优化器。请把用户问题重写成更适合检索知识库的关键词或问题。
-            规则：
-            1. 提取核心意图（退换、价格、功能、技术支持等）
-            2. 补全可能的同义词（如"退货"→"退换货、退款、退货流程"）
-            3. 只输出改写后的查询文本，不要解释
+        return self.transformer.rewrite(query)
 
-            用户问题：{query}
-
-            改写后的查询：
-                """
-        response = self.llm.invoke(prompt)
-        return response.content.strip()
-    
+    def rewrite_many(self, queries: list[str]) -> list[str]:
+        rewritten = [self.rewrite(query) for query in queries]
+        unique: list[str] = []
+        seen = set()
+        for query in rewritten:
+            normalized = " ".join(query.split()).casefold()
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                unique.append(query)
+        return unique
 
     def rewrite_and_search(self, query: str, vector_store, k: int = 5):
-        rewritten = self.rewrite(query)
-        print(f"改写前：{query}")
-        print(f"改写后：{rewritten}")
-        results = vector_store.similarity_search(rewritten, k=k)
-        return results
+        queries = self.expander.expand(query)
+        rewritten_queries = self.rewrite_many(queries)
+        return self.multi_query_search(rewritten_queries, vector_store, k=k)
+
+    @staticmethod
+    def multi_query_search(queries: list[str], vector_store, k: int = 5):
+        rankings: dict[tuple[str, str], tuple[object, float]] = {}
+        for query in queries:
+            for rank, document in enumerate(vector_store.similarity_search(query, k=k), start=1):
+                key = (document.metadata.get("source", ""), document.page_content)
+                previous = rankings.get(key)
+                score = 1.0 / (60 + rank)
+                if previous is None:
+                    rankings[key] = (document, score)
+                else:
+                    rankings[key] = (previous[0], previous[1] + score)
+        return [item[0] for item in sorted(rankings.values(), key=lambda item: item[1], reverse=True)[:k]]
