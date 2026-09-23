@@ -33,7 +33,7 @@ class BaseAgent(ABC):
 
         return "已达到最大步数，对话结束"
 
-    async def run_stream(self, user_prompt: str = None):
+    async def run_stream(self, user_prompt: str = None, run_id: str | None = None, chat_id: str | None = None):
         """流式版主循环：把 think_stream 产出的 token 逐个 yield 出去。"""
         self.state = AgentState.RUNNING
         if user_prompt:
@@ -51,6 +51,8 @@ class BaseAgent(ABC):
                 action_result = await self.act()
                 if self.state == AgentState.WAITING_FOR_HUMAN:
                     payload = json.loads(action_result.split("__ASK_HUMAN__:", 1)[1].strip())
+                    if run_id and hasattr(self, "save_run_state"):
+                        self.save_run_state(run_id, chat_id)
                     yield {"type": "ask_human", "data": {
                         "question": payload.get("question"),
                         "options": payload.get("options", []),

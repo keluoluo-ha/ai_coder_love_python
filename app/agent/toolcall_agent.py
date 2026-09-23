@@ -1,4 +1,5 @@
 import json
+from app.agent.run_state_store import AgentRunState, run_state_store
 from app.agent.react_agent import ReActAgent
 from app.llm import LLM
 from app.schema import AgentState, Message, ToolCall, Function
@@ -19,6 +20,8 @@ class ToolCallAgent(ReActAgent):
             msgs.append(Message.system_message(self.system_prompt))
         if self.next_prompt:
             msgs.append(Message.system_message(self.next_prompt))
+        if getattr(self, "rereading_prompt", None):
+            msgs.append(Message.system_message(self.rereading_prompt))
         return msgs
 
     # think：调 LLM，解析是否要调工具（非流式版，测试仍在用）
@@ -79,6 +82,7 @@ class ToolCallAgent(ReActAgent):
 
             if name == "ask_human":
                 self.state = AgentState.WAITING_FOR_HUMAN
+                self.pending_tool_calls = self.tool_calls_buffer[self.tool_calls_buffer.index(tc):]
                 return "__ASK_HUMAN__: " + json.dumps(args, ensure_ascii=False)
 
             # 执行工具
@@ -91,3 +95,31 @@ class ToolCallAgent(ReActAgent):
                 return str(result)
 
         return None
+
+    def save_run_state(self, run_id: str, chat_id: str | None = None) -> None:
+        pending = getattr(self, "pending_tool_calls", [])
+        run_state_store.save(AgentRunState(
+            run_id=run_id,
+            memory=list(self.memory.messages),
+            steps=self.current_steps,
+            state=self.state,
+            pending_tool_calls=[call.model_dump() for call in pending],
+            chat_id=chat_id,
+        ))
+
+    async def resume_with_human_reply(self, run_id: str, answer: str, chat_id: str | None = None):
+        run_state = run_state_store.get(run_id)
+        if run_state is None:
+            raise LookupError("runId不存在或已过期")
+        self.restore_run_state(run_state)
+        pending = getattr(self, "pending_tool_calls", [])
+        if not pending:
+            raise ValueError("该运行当前不在等待人工回答状态")
+        human_call = pending[0]
+        self.memory.add_message(Message.tool_message(answer, "ask_human", human_call.id))
+        self.pending_tool_calls = []
+        self.state = AgentState.RUNNING
+        async for event in self.run_stream(None, run_id=run_id, chat_id=chat_id or run_state.chat_id):
+            if event["type"] == "done" and self.state != AgentState.WAITING_FOR_HUMAN:
+                run_state_store.delete(run_id)
+            yield event
