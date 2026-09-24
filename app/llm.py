@@ -1,6 +1,7 @@
 # app/llm.py
 from openai import OpenAI
 import os
+from app.advisor.logger_advisor import LoggerAdvisor
 from app.schema import Message
 
 
@@ -11,6 +12,7 @@ class LLM:
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         )
         self.model = model
+        self.logger_advisor = LoggerAdvisor()
 
     def ask_tool(self, messages, system_msgs=None, tools=None):
         # 1. 合并 system_msgs + messages
@@ -30,7 +32,13 @@ class LLM:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
 
-        response = self.client.chat.completions.create(**kwargs)
+        response = self.logger_advisor.around(
+            "ask_tool",
+            self.model,
+            full_messages,
+            tools,
+            lambda: self.client.chat.completions.create(**kwargs),
+        )
         # 4. 取 response.choices[0].message 返回（含 content + tool_calls）
         return response.choices[0].message
 
@@ -46,26 +54,29 @@ class LLM:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
 
-        stream = self.client.chat.completions.create(**kwargs)
-        tool_calls_acc = {}  # index -> {"id", "name", "arguments"}
-        for chunk in stream:
-            if not chunk.choices:
-                continue
-            delta = chunk.choices[0].delta
-            # 文本 token：边生成边 yield（打字机来源）
-            if delta.content:
-                yield ("text", delta.content)
-            # 工具调用：stream 下是分片到达，必须累加
-            if delta.tool_calls:
-                for tc in delta.tool_calls:
-                    idx = tc.index
-                    if idx not in tool_calls_acc:
-                        tool_calls_acc[idx] = {"id": tc.id or f"call_{idx}", "name": "", "arguments": ""}
-                    if tc.function:
-                        if tc.function.name:
-                            tool_calls_acc[idx]["name"] = tc.function.name
-                        if tc.function.arguments:
-                            tool_calls_acc[idx]["arguments"] += tc.function.arguments
-        # 流结束，若本轮要调工具，把拼好的 tool_calls 一次性 yield
-        if tool_calls_acc:
-            yield ("tool_calls", [tool_calls_acc[i] for i in sorted(tool_calls_acc)])
+        started_at = self.logger_advisor.before("ask_tool_stream", self.model, full_messages, tools)
+        try:
+            stream = self.client.chat.completions.create(**kwargs)
+            tool_calls_acc = {}  # index -> {"id", "name", "arguments"}
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    yield ("text", delta.content)
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        idx = tc.index
+                        if idx not in tool_calls_acc:
+                            tool_calls_acc[idx] = {"id": tc.id or f"call_{idx}", "name": "", "arguments": ""}
+                        if tc.function:
+                            if tc.function.name:
+                                tool_calls_acc[idx]["name"] = tc.function.name
+                            if tc.function.arguments:
+                                tool_calls_acc[idx]["arguments"] += tc.function.arguments
+            if tool_calls_acc:
+                yield ("tool_calls", [tool_calls_acc[i] for i in sorted(tool_calls_acc)])
+            self.logger_advisor.after("ask_tool_stream", started_at)
+        except Exception as exc:
+            self.logger_advisor.after("ask_tool_stream", started_at, error=exc)
+            raise

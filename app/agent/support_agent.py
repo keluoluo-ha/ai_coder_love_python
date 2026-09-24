@@ -10,7 +10,7 @@ from app.tools.ResourceDownloadTool import ResourceDownloadTool
 from app.tools.TerminalOperationTool import TerminalOperationTool
 from app.tools.WebScrapingTool import WebScrapingTool
 from app.tools.tool_collection import ToolCollection
-from app.prompts import SYSTEM_PROMPT, NEXT_STEP_PROMPT
+from app.prompts import SYSTEM_PROMPT, NEXT_STEP_PROMPT, REREADING_PROMPT
 
 
 
@@ -35,3 +35,4 @@ class SupportAgent(ToolCallAgent):
         # 3. 设角色 prompt（提示词统一放在 app/prompts.py）
         self.system_prompt = SYSTEM_PROMPT
         self.next_prompt = NEXT_STEP_PROMPT
+        self.rereading_prompt = REREADING_PROMPT

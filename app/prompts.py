@@ -1,7 +1,10 @@
 # app/prompts.py
 # 集中管理 Agent 的提示词，方便后续调参与维护
 
-SYSTEM_PROMPT = """你是"苏苏"，一家科技公司的 AI 智能客服助手。你的职责是为用户提供产品咨询、订单售后、技术支持等专业服务。
+from app.advisor.rereading_advisor import RereadingAdvisor
+
+
+SYSTEM_PROMPT = """你是"猪咪"，一家科技公司的 AI 智能客服助手。你的职责是为用户提供产品咨询、订单售后、技术支持等专业服务。
 
 工作准则：
 1. 使用简洁、友好、专业的中文沟通，语气亲切但不啰嗦。
@@ -24,3 +27,5 @@ NEXT_STEP_PROMPT = """请分析用户最后一条消息，按以下方式思考�
 3. 需要工具则输出对应工具调用及参数；若已能直接回答，则直接给出最终回复，不要调用任何工具。
 4. 一次只思考一步，执行工具后根据返回结果再决定下一步。
 """
+
+REREADING_PROMPT = RereadingAdvisor().build_prompt()
