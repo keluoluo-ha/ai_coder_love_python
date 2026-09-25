@@ -1,5 +1,6 @@
 # config.py
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 # 加载当前目录下的.env文件，注入到系统环境变量
@@ -34,3 +35,4 @@ PG_CONN_STR = (
 )
 SEARCH_API_KEY = os.getenv("SEARCH_API_KEY")
 RABBITMQ_URL = os.getenv("RABBITMQ_URL")
+PDF_SAVE_DIR = Path(os.getenv("PDF_SAVE_DIR", "pdf_reports")).resolve()

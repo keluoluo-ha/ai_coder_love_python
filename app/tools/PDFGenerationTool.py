@@ -3,6 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.config import PDF_SAVE_DIR
 from app.tools.base_tool import BaseTool
 
 
@@ -17,8 +18,9 @@ class PDFGenerationTool(BaseTool):
     description: str = "生成恋爱咨询报告 PDF 并返回文件路径"
     parameters: type[BaseModel] = PDFGenerationInput
 
-    def __init__(self, output_dir: str | Path = "pdf_reports"):
-        self.output_dir = Path(output_dir).resolve()
+    def __init__(self, output_dir: str | Path | None = None):
+        # 如果调用时传了 output_dir（非空），就用它；如果传了 None 或空字符串，就用全局常量 PDF_SAVE_DIR 作为默认保存目录。
+        self.output_dir = Path(output_dir or PDF_SAVE_DIR).resolve()
 
     async def execute(self, title: str, content: str, filename: str = "love_report.pdf") -> str:
         from reportlab.lib.pagesizes import A4
