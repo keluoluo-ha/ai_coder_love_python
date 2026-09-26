@@ -1,0 +1,29 @@
+{
+  "name": "support-agent-rag-smoke",
+  "cases": [
+    {
+      "id": "refund-policy",
+      "query": "购买后几天内可以申请退款，退款流程是什么？",
+      "relevant_docs": ["return_policy.md"],
+      "k": 3
+    },
+    {
+      "id": "plan-price",
+      "query": "专业版价格和 API 调用次数是多少？",
+      "relevant_docs": ["pricing_plan.md"],
+      "k": 3
+    },
+    {
+      "id": "reset-password",
+      "query": "忘记密码后如何重置账号密码？",
+      "relevant_docs": ["account_security.md"],
+      "k": 3
+    },
+    {
+      "id": "api-401",
+      "query": "接口调用返回 401 未授权如何排查？",
+      "relevant_docs": ["technical_support.md"],
+      "k": 3
+    }
+  ]
+}

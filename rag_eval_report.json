@@ -1,0 +1,53 @@
+{
+  "dataset_name": "support-agent-rag-smoke",
+  "case_count": 4,
+  "hit_at_k": 1.0,
+  "mrr": 1.0,
+  "recall_at_k": 1.0,
+  "cases": [
+    {
+      "case_id": "refund-policy",
+      "hit_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "recall_at_k": 1.0,
+      "retrieved_docs": [
+        "return_policy.md",
+        "service_scripts.md",
+        "pricing_plan.md"
+      ]
+    },
+    {
+      "case_id": "plan-price",
+      "hit_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "recall_at_k": 1.0,
+      "retrieved_docs": [
+        "pricing_plan.md",
+        "product_faq.md",
+        "technical_support.md"
+      ]
+    },
+    {
+      "case_id": "reset-password",
+      "hit_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "recall_at_k": 1.0,
+      "retrieved_docs": [
+        "account_security.md",
+        "product_faq.md",
+        "technical_support.md"
+      ]
+    },
+    {
+      "case_id": "api-401",
+      "hit_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "recall_at_k": 1.0,
+      "retrieved_docs": [
+        "technical_support.md",
+        "product_faq.md",
+        "account_security.md"
+      ]
+    }
+  ]
+}

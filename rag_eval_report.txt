@@ -1,0 +1,10 @@
+dataset: support-agent-rag-smoke
+cases: 4
+Hit@k: 1.0000
+MRR: 1.0000
+Recall@k: 1.0000
+cases:
+  refund-policy: Hit@k=1 RR=1.0000 Recall@k=1.0000
+  plan-price: Hit@k=1 RR=1.0000 Recall@k=1.0000
+  reset-password: Hit@k=1 RR=1.0000 Recall@k=1.0000
+  api-401: Hit@k=1 RR=1.0000 Recall@k=1.0000
