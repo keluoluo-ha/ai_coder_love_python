@@ -1,3 +1,11 @@
+"""生产端：发布情感关怀事件 + 声明延迟消息拓扑。
+
+可靠性要点：
+- 队列 durable=True、消息 delivery_mode=Persistent：都落盘，Broker 重启不丢消息。
+- message_id=event_id：作为幂等键传给 Broker 和下游。
+- 发布为短连接（建连即发即关）：低频事件场景开销可忽略，代码最简；高 QPS 再换连接池 + publisher confirm。
+延迟提醒：TTL + 死信路由原生方案（不依赖 rabbitmq_delayed_message_exchange 插件），见 publish_follow_up_reminder。
+"""
 import logging
 import os
 from datetime import datetime, timezone
@@ -19,6 +27,7 @@ def declare_delay_topology(channel) -> None:
 
     等待队列无消费者，配 x-dead-letter-exchange="" + x-dead-letter-routing-key=提醒队列，
     消息 TTL 到期自动变为死信，经默认交换机路由到 REMINDER_QUEUE，由消费者到点收到。
+    用默认交换机("")而非自定义 exchange：路由即队列名，拓扑更简单。
     """
     channel.queue_declare(queue=REMINDER_QUEUE, durable=True)
     channel.queue_declare(
@@ -45,20 +54,20 @@ class EmotionalCareEventPublisher:
         connection = pika.BlockingConnection(self.parameters)
         try:
             channel = connection.channel()
-            channel.queue_declare(queue=self.queue_name, durable=True)
+            channel.queue_declare(queue=self.queue_name, durable=True)  # 队列落盘
             channel.basic_publish(
-                exchange="",
+                exchange="",  # 默认交换机：routing_key 即队列名
                 routing_key=self.queue_name,
                 body=event.to_bytes(),
                 properties=pika.BasicProperties(
                     content_type="application/json",
-                    delivery_mode=pika.DeliveryMode.Persistent,
-                    message_id=event.event_id,
+                    delivery_mode=pika.DeliveryMode.Persistent,  # 消息落盘
+                    message_id=event.event_id,  # 幂等键
                     type=event.event_type,
                 ),
             )
         finally:
-            connection.close()
+            connection.close()  # 短连接：低频事件，建连即发即关
 
     def publish_consultation_completed(self, consultation_id: int, user_id: str) -> None:
         self.publish(EmotionalCareEvent.consultation_completed(consultation_id, user_id))
