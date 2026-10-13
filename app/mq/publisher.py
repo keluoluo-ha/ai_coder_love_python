@@ -1,10 +1,12 @@
-"""生产端：发布情感关怀事件 + 声明延迟消息拓扑。
+"""生产端：发布情感关怀事件 + 声明 MQ 拓扑（含延迟 + 死信兜底）。
 
 可靠性要点：
 - 队列 durable=True、消息 delivery_mode=Persistent：都落盘，Broker 重启不丢消息。
 - message_id=event_id：作为幂等键传给 Broker 和下游。
-- 发布为短连接（建连即发即关）：低频事件场景开销可忽略，代码最简；高 QPS 再换连接池 + publisher confirm。
+- publisher confirm：confirm_delivery() 后 basic_publish 会等 Broker 确认落盘，未确认抛异常可重发。
+- 发布为短连接（建连即发即关）：低频事件场景开销可忽略，代码最简；高 QPS 再换连接池。
 延迟提醒：TTL + 死信路由原生方案（不依赖 rabbitmq_delayed_message_exchange 插件），见 publish_follow_up_reminder。
+死信兜底：主队列配 x-dead-letter-exchange 指向 DLQ，消费失败 nack(requeue=False) 进 DLQ 不再无限回队。
 """
 import logging
 import os
@@ -20,16 +22,46 @@ QUEUE_NAME = "emotional_care_events"
 REMINDER_QUEUE = "emotional_care_reminders"
 # 无消费者的等待队列：消息在此按 per-message TTL 停留，到期后经死信路由投递到 REMINDER_QUEUE
 WAIT_QUEUE = "emotional_care_delay_wait"
+# 死信交换机 + 各队列的死信告警队列(DLQ)：消费失败的消息进 DLQ，不再无限回队
+DLQ_EXCHANGE = "emotional_care_dlx"
+EVENTS_DLQ = "emotional_care_events_dlq"
+REMINDER_DLQ = "emotional_care_reminders_dlq"
 
 
-def declare_delay_topology(channel) -> None:
-    """声明延迟消息拓扑：提醒队列 + 死信等待队列。
+def declare_topology(channel) -> None:
+    """声明完整拓扑：events/reminders 主队列 + 各自 DLQ + 延迟等待队列。
 
-    等待队列无消费者，配 x-dead-letter-exchange="" + x-dead-letter-routing-key=提醒队列，
-    消息 TTL 到期自动变为死信，经默认交换机路由到 REMINDER_QUEUE，由消费者到点收到。
-    用默认交换机("")而非自定义 exchange：路由即队列名，拓扑更简单。
+    主队列配 x-dead-letter-exchange=DLQ_EXCHANGE：消费失败时 nack(requeue=False) 让消息进 DLQ。
+    WAIT_QUEUE 用默认交换机("")死信到 REMINDER_QUEUE：这是延迟投递机制(TTL 到期变死信)。
+    注意：队列 args 变更后，已存在的旧队列会因 inequivalent args 报错，需先删旧队列(全新 Broker 无此问题)。
     """
-    channel.queue_declare(queue=REMINDER_QUEUE, durable=True)
+    channel.exchange_declare(exchange=DLQ_EXCHANGE, exchange_type="direct", durable=True)
+
+    # events 队列 + 其 DLQ
+    channel.queue_declare(queue=EVENTS_DLQ, durable=True)
+    channel.queue_bind(queue=EVENTS_DLQ, exchange=DLQ_EXCHANGE, routing_key=EVENTS_DLQ)
+    channel.queue_declare(
+        queue=QUEUE_NAME,
+        durable=True,
+        arguments={
+            "x-dead-letter-exchange": DLQ_EXCHANGE,
+            "x-dead-letter-routing-key": EVENTS_DLQ,
+        },
+    )
+
+    # reminders 队列 + 其 DLQ
+    channel.queue_declare(queue=REMINDER_DLQ, durable=True)
+    channel.queue_bind(queue=REMINDER_DLQ, exchange=DLQ_EXCHANGE, routing_key=REMINDER_DLQ)
+    channel.queue_declare(
+        queue=REMINDER_QUEUE,
+        durable=True,
+        arguments={
+            "x-dead-letter-exchange": DLQ_EXCHANGE,
+            "x-dead-letter-routing-key": REMINDER_DLQ,
+        },
+    )
+
+    # 延迟等待队列：无消费者，TTL 到期死信到 REMINDER_QUEUE（走默认交换机，routing_key 即队列名）
     channel.queue_declare(
         queue=WAIT_QUEUE,
         durable=True,
@@ -38,6 +70,11 @@ def declare_delay_topology(channel) -> None:
             "x-dead-letter-routing-key": REMINDER_QUEUE,
         },
     )
+
+
+# 兼容旧引用（consumer 原来 import declare_delay_topology）
+def declare_delay_topology(channel) -> None:
+    declare_topology(channel)
 
 
 class EmotionalCareEventPublisher:
@@ -54,7 +91,8 @@ class EmotionalCareEventPublisher:
         connection = pika.BlockingConnection(self.parameters)
         try:
             channel = connection.channel()
-            channel.queue_declare(queue=self.queue_name, durable=True)  # 队列落盘
+            declare_topology(channel)
+            channel.confirm_delivery()  # 开 publisher confirm：basic_publish 会等 Broker 确认落盘
             channel.basic_publish(
                 exchange="",  # 默认交换机：routing_key 即队列名
                 routing_key=self.queue_name,
@@ -93,7 +131,8 @@ class EmotionalCareEventPublisher:
         connection = pika.BlockingConnection(self.parameters)
         try:
             channel = connection.channel()
-            declare_delay_topology(channel)
+            declare_topology(channel)
+            channel.confirm_delivery()  # publisher confirm：确认延迟消息已落盘
             target_queue = WAIT_QUEUE if ttl_ms > 0 else REMINDER_QUEUE
             basic_props = {
                 "content_type": "application/json",

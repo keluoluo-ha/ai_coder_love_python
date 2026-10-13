@@ -92,3 +92,17 @@ class EmotionProfile(Base):
     last_consultation_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
     updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'), onupdate=datetime.datetime.utcnow)
+
+
+class ProcessedEventLog(Base):
+    """已处理事件日志：消费端用 event_id 幂等，重复投递直接跳过。
+
+    与业务键查重(consultation_id)是两层防线：业务键防"同一咨询重复建单"，
+    event_id 防"同一条事件重复消费整段逻辑"(含 profile 更新)。
+    """
+    __tablename__ = 'processed_event_log'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True, comment='MQ事件幂等键')
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, comment='事件类型')
+    processed_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'), comment='处理完成时间')

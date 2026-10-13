@@ -6,7 +6,8 @@
 - heartbeat=30 防 TCP 连接假死；外层 while + wait(5) 实现断线自动重连。
 - basic_qos(prefetch_count=1)：一次只给消费者 1 条，慢消费者不堆积、多实例时公平分发。
 - 同时消费 events（咨询/回访完成）和 reminders（到点提醒）两个队列。
-已知技术债：nack requeue 是简单重试，失败消息会无限回队，后续可配死信队列 + x-death 计数兜底。
+失败兜底：主队列配 x-dead-letter-exchange 指向 DLQ，消费失败 nack(requeue=False) 进 DLQ 不再无限回队；
+进一步可用 TTL 重试队列做指数退避（当前为失败即进 DLQ 告警）。
 """
 import logging
 import signal
@@ -16,7 +17,7 @@ import pika
 
 from app.config import RABBITMQ_URL
 from app.mq.event import EmotionalCareEvent
-from app.mq.publisher import QUEUE_NAME, REMINDER_QUEUE, WAIT_QUEUE, declare_delay_topology
+from app.mq.publisher import QUEUE_NAME, REMINDER_QUEUE, WAIT_QUEUE, declare_topology
 from app.services.emotional_care_post_process import EmotionalCarePostProcessService, generate_care_copy
 
 logger = logging.getLogger(__name__)
@@ -47,8 +48,7 @@ class EmotionalCareEventConsumer:
             try:
                 self._connection = pika.BlockingConnection(parameters)
                 channel = self._connection.channel()
-                channel.queue_declare(queue=self.queue_name, durable=True)
-                declare_delay_topology(channel)  # 声明 REMINDER_QUEUE + WAIT_QUEUE
+                declare_topology(channel)  # 声明主队列+DLQ+延迟队列（含 x-dead-letter 配置）
                 channel.basic_qos(prefetch_count=1)  # 公平分发：每次只投 1 条给本消费者
                 channel.basic_consume(queue=self.queue_name, on_message_callback=self._on_message, auto_ack=False)
                 channel.basic_consume(queue=REMINDER_QUEUE, on_message_callback=self._on_reminder, auto_ack=False)
@@ -64,16 +64,17 @@ class EmotionalCareEventConsumer:
                 self._connection = None
 
     def _on_message(self, channel, method, properties, body: bytes) -> None:
-        """咨询/回访完成事件回调：反序列化 -> 跑业务 -> 成功 ack / 异常 nack 回队。"""
+        """咨询/回访完成事件回调：反序列化 -> 跑业务 -> 成功 ack / 异常进 DLQ。"""
         try:
             event = EmotionalCareEvent.from_bytes(body)
             care_copy = generate_care_copy(event)
             self.post_process.handle(event, care_copy)
             logger.info("processed emotional care event id=%s copy=%s", event.event_id, care_copy)
         except Exception:
-            # TODO(技术债): 简单 requeue 会无限重试，后续应转死信队列 + x-death 计数兜底
-            logger.exception("failed emotional care event delivery_tag=%s", method.delivery_tag)
-            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            # 失败转 DLQ（requeue=False）：消息经主队列的 x-dead-letter-exchange 进 emotional_care_events_dlq，
+            # 不再无限回队；进一步可用 TTL 重试队列做指数退避（当前为失败即告警）。
+            logger.exception("failed emotional care event delivery_tag=%s -> DLQ", method.delivery_tag)
+            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
             return
         channel.basic_ack(delivery_tag=method.delivery_tag)  # 成功才 ack，消息从队列移除
 
@@ -84,8 +85,9 @@ class EmotionalCareEventConsumer:
             self.post_process.handle(event, "")
             logger.info("fired follow-up reminder id=%s follow_up=%s", event.event_id, event.follow_up_id)
         except Exception:
-            logger.exception("failed follow-up reminder delivery_tag=%s", method.delivery_tag)
-            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            # 同 _on_message：失败转 reminders_dlq，不再无限回队
+            logger.exception("failed follow-up reminder delivery_tag=%s -> DLQ", method.delivery_tag)
+            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
             return
         channel.basic_ack(delivery_tag=method.delivery_tag)
 

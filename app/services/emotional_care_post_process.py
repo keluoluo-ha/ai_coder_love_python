@@ -7,7 +7,7 @@
 """
 import logging
 
-from app.db.models import ConsultationFollowUp, ConsultationRecord
+from app.db.models import ConsultationFollowUp, ConsultationRecord, ProcessedEventLog
 from app.db.session import SessionLocal
 from app.domain.consultation_effect_evaluator import ConsultationEffectEvaluator
 from app.mq.event import EmotionalCareEvent
@@ -22,6 +22,10 @@ class EmotionalCarePostProcessService:
     def handle(self, event: EmotionalCareEvent, care_copy: str) -> None:
         with SessionLocal() as db:
             try:
+                # event_id 幂等：重复投递的同一条事件直接跳过（与业务键查重是两层防线）
+                if self._already_processed(db, event.event_id):
+                    logger.info("skip duplicate event id=%s type=%s", event.event_id, event.event_type)
+                    return
                 if event.event_type == EmotionalCareEvent.CONSULTATION_COMPLETED:
                     self._handle_consultation(db, event, care_copy)
                 elif event.event_type == EmotionalCareEvent.FOLLOW_UP_COMPLETED:
@@ -30,10 +34,18 @@ class EmotionalCarePostProcessService:
                     self._handle_reminder(db, event)
                 else:
                     raise ValueError(f"unsupported emotional care event type: {event.event_type}")
+                # 标记已处理：与业务提交同一个事务，业务失败则不标记（下次重投会重新执行）
+                self._mark_processed(db, event.event_id, event.event_type)
                 db.commit()  # 单事件一个事务
             except Exception:
-                db.rollback()  # 失败回滚，异常上抛 -> consumer nack requeue
+                db.rollback()  # 失败回滚，异常上抛 -> consumer nack 进 DLQ
                 raise
+
+    def _already_processed(self, db, event_id: str) -> bool:
+        return db.query(ProcessedEventLog).filter_by(event_id=event_id).first() is not None
+
+    def _mark_processed(self, db, event_id: str, event_type: str) -> None:
+        db.add(ProcessedEventLog(event_id=event_id, event_type=event_type))
 
     def _handle_consultation(self, db, event: EmotionalCareEvent, care_copy: str) -> None:
         record = db.get(ConsultationRecord, event.consultation_id)
