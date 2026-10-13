@@ -15,12 +15,13 @@ class ResourceDownloadInput(BaseModel):
 class ResourceDownloadTool(BaseTool):
     name: str = "resource_download"
     description: str = "下载 HTTP 或 HTTPS 资源并返回本地文件路径"
-    parameters: type[BaseModel] = ResourceDownloadInput
+    args_schema: type[BaseModel] = ResourceDownloadInput
+    output_dir: Path = Path("downloads")
 
-    def __init__(self, output_dir: str | Path = "downloads"):
-        self.output_dir = Path(output_dir).resolve()
+    def __init__(self, output_dir: str | Path = "downloads", **kwargs):
+        super().__init__(output_dir=Path(output_dir).resolve(), **kwargs)
 
-    async def execute(self, url: str, filename: str | None = None) -> str:
+    def _run(self, url: str, filename: str | None = None) -> str:
         parsed = urlparse(url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise ValueError("url must use HTTP or HTTPS")
@@ -37,3 +38,6 @@ class ResourceDownloadTool(BaseTool):
                 if chunk:
                     output.write(chunk)
         return str(output_path)
+
+    async def _arun(self, url: str, filename: str | None = None) -> str:
+        return self._run(url, filename)

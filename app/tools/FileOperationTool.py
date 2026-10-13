@@ -15,10 +15,11 @@ class FileOperationInput(BaseModel):
 class FileOperationTool(BaseTool):
     name: str = "file_operation"
     description: str = "在受限工作目录内读取、写入或列出文件"
-    parameters: type[BaseModel] = FileOperationInput
+    args_schema: type[BaseModel] = FileOperationInput
+    root_dir: Path = Path(".")
 
-    def __init__(self, root_dir: str | Path = "."):
-        self.root_dir = Path(root_dir).resolve()
+    def __init__(self, root_dir: str | Path = ".", **kwargs):
+        super().__init__(root_dir=Path(root_dir).resolve(), **kwargs)
 
     def _safe_path(self, path: str) -> Path:
         candidate = (self.root_dir / path).resolve()
@@ -28,7 +29,7 @@ class FileOperationTool(BaseTool):
             raise ValueError("path escapes the allowed workspace") from exc
         return candidate
 
-    async def execute(
+    def _run(
         self,
         file_operation: Literal["read", "write", "list"],
         path: str = ".",
@@ -48,3 +49,11 @@ class FileOperationTool(BaseTool):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return str(target)
+
+    async def _arun(
+        self,
+        file_operation: Literal["read", "write", "list"],
+        path: str = ".",
+        content: str | None = None,
+    ) -> str:
+        return self._run(file_operation, path, content)

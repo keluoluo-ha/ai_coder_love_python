@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field
 import requests
 from bs4 import BeautifulSoup
+from pydantic import BaseModel, Field
 
 from app.tools.base_tool import BaseTool
 
@@ -12,9 +12,9 @@ class WebScrapingInput(BaseModel):
 class WebScrapingTool(BaseTool):
     name: str = "web_scraping"
     description: str = "抓取网页正文并去除脚本、样式和页面导航噪声"
-    parameters: type[BaseModel] = WebScrapingInput
+    args_schema: type[BaseModel] = WebScrapingInput
 
-    async def execute(self, url: str) -> str:
+    def _run(self, url: str) -> str:
         response = requests.get(
             url,
             timeout=30,
@@ -27,3 +27,6 @@ class WebScrapingTool(BaseTool):
         root = soup.find("article") or soup.find("main") or soup.body or soup
         lines = [line.strip() for line in root.get_text("\n").splitlines()]
         return "\n".join(line for line in lines if line)
+
+    async def _arun(self, url: str) -> str:
+        return self._run(url)

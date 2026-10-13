@@ -1,6 +1,6 @@
 import shlex
 import subprocess
-from typing import Any
+from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
@@ -15,15 +15,15 @@ class TerminalOperationInput(BaseModel):
 class TerminalOperationTool(BaseTool):
     name: str = "terminal"
     description: str = "执行受限终端命令并返回标准输出和错误"
-    parameters: type[BaseModel] = TerminalOperationInput
+    args_schema: type[BaseModel] = TerminalOperationInput
 
-    _blocked_tokens = {
+    _blocked_tokens: ClassVar[set[str]] = {
         "rm", "rmdir", "del", "erase", "format", "shutdown", "reboot",
         "sudo", "chmod", "chown", "mkfs", "diskpart", "reg", "powershell",
     }
-    _blocked_fragments = ("&&", "||", ";", "|", ">", "<", "`", "$('")
+    _blocked_fragments: ClassVar[tuple[str, ...]] = ("&&", "||", ";", "|", ">", "<", "`", "$('")
 
-    async def execute(self, command: str, timeout: int = 30) -> str:
+    def _run(self, command: str, timeout: int = 30) -> str:
         if any(fragment in command for fragment in self._blocked_fragments):
             raise ValueError("command contains a blocked shell operator")
         try:
@@ -48,3 +48,6 @@ class TerminalOperationTool(BaseTool):
         output = completed.stdout.strip()
         error = completed.stderr.strip()
         return f"exit_code={completed.returncode}\nstdout={output}\nstderr={error}"
+
+    async def _arun(self, command: str, timeout: int = 30) -> str:
+        return self._run(command, timeout)

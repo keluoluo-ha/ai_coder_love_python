@@ -12,7 +12,10 @@ class AskHumanTool(BaseTool):
     description: str = (
         "向用户询问缺失信息、确认偏好或获取反馈。调用后暂停当前运行，等待用户通过 reply 接口回答。"
     )
-    parameters: type[BaseModel] = AskHumanInput
+    args_schema: type[BaseModel] = AskHumanInput
 
-    async def execute(self, question: str) -> str:
+    def _run(self, question: str) -> str:
         return question
+
+    async def _arun(self, question: str) -> str:
+        return self._run(question)

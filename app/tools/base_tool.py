@@ -1,34 +1,25 @@
-from abc import ABC,abstractmethod
-from typing import Any, Type,Dict
-from pydantic import BaseModel
+"""工具基类：继承 LangChain 的 BaseTool（Tool Calling）。
+
+之前是自研 BaseTool + 手写 OpenAI function calling 参数，
+现在统一迁移到 LangChain Tool Calling：
+- 工具即 langchain_core.tools.BaseTool 子类；
+- 参数 schema 用 Pydantic 模型声明在 args_schema，由 LangChain 负责校验；
+- 工具 -> OpenAI function calling 参数的转换由 LangChain 官方
+  convert_to_openai_function 完成。
+"""
+from typing import Any, Dict
+
+from langchain_core.tools import BaseTool as LangChainBaseTool
+from langchain_core.utils.function_calling import convert_to_openai_function
 
 
+class BaseTool(LangChainBaseTool):
+    """项目工具基类 = LangChain BaseTool + 旧接口兼容方法"""
 
-class BaseTool(ABC):
-  name:str
-  description:str
-  parameters:Type[BaseModel]
+    def to_param(self) -> Dict[str, Any]:
+        """兼容旧接口：LangChain 工具 -> OpenAI function calling JSON"""
+        return convert_to_openai_function(self)
 
-  @abstractmethod
-  async def execute(self,**kwargs)->Any:
-    """工具执行逻辑，由子类实现"""
-    raise NotImplementedError
-
-  async def __call__(self, **kwargs)->Any:
-    """直接 await tool(xxx) 调用，自动校验参数"""
-    # 使用Pydantic自动校验入参
-    validated_params=self.parameters(**kwargs)
-    return await self.execute(**validated_params.model_dump())
-
-
-  def to_param(self)->Dict[str,Any]:
-    """转换为标准 OpenAI function calling JSON"""
-    schema= self.parameters.model_json_schema()
-    return{
-      "type":"function",
-      "function":{
-        "name":self.name,
-        "description":self.description,
-        "parameters":schema
-      }
-    }
+    async def __call__(self, **kwargs) -> Any:
+        """兼容旧调用方式 await tool(x=...)，走 LangChain 异步执行与参数校验"""
+        return await self.ainvoke(kwargs)

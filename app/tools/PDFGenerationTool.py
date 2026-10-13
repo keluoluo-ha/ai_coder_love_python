@@ -16,13 +16,14 @@ class PDFGenerationInput(BaseModel):
 class PDFGenerationTool(BaseTool):
     name: str = "pdf_generate"
     description: str = "生成恋爱咨询报告 PDF 并返回文件路径"
-    parameters: type[BaseModel] = PDFGenerationInput
+    args_schema: type[BaseModel] = PDFGenerationInput
+    output_dir: Path = Path(".")
 
-    def __init__(self, output_dir: str | Path | None = None):
-        # 如果调用时传了 output_dir（非空），就用它；如果传了 None 或空字符串，就用全局常量 PDF_SAVE_DIR 作为默认保存目录。
-        self.output_dir = Path(output_dir or PDF_SAVE_DIR).resolve()
+    def __init__(self, output_dir: str | Path | None = None, **kwargs):
+        # 传了 output_dir 就用它；None/空字符串则用全局常量 PDF_SAVE_DIR
+        super().__init__(output_dir=Path(output_dir or PDF_SAVE_DIR).resolve(), **kwargs)
 
-    async def execute(self, title: str, content: str, filename: str = "love_report.pdf") -> str:
+    def _run(self, title: str, content: str, filename: str = "love_report.pdf") -> str:
         from reportlab.lib.pagesizes import A4
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
@@ -61,3 +62,6 @@ class PDFGenerationTool(BaseTool):
             story.append(Spacer(1, 8))
         document.build(story)
         return str(output_path)
+
+    async def _arun(self, title: str, content: str, filename: str = "love_report.pdf") -> str:
+        return self._run(title, content, filename)
