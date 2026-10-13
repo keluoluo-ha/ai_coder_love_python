@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime, timezone
 
 import pika
 
@@ -8,6 +9,26 @@ from app.mq.event import EmotionalCareEvent
 
 logger = logging.getLogger(__name__)
 QUEUE_NAME = "emotional_care_events"
+REMINDER_QUEUE = "emotional_care_reminders"
+# 无消费者的等待队列：消息在此按 per-message TTL 停留，到期后经死信路由投递到 REMINDER_QUEUE
+WAIT_QUEUE = "emotional_care_delay_wait"
+
+
+def declare_delay_topology(channel) -> None:
+    """声明延迟消息拓扑：提醒队列 + 死信等待队列。
+
+    等待队列无消费者，配 x-dead-letter-exchange="" + x-dead-letter-routing-key=提醒队列，
+    消息 TTL 到期自动变为死信，经默认交换机路由到 REMINDER_QUEUE，由消费者到点收到。
+    """
+    channel.queue_declare(queue=REMINDER_QUEUE, durable=True)
+    channel.queue_declare(
+        queue=WAIT_QUEUE,
+        durable=True,
+        arguments={
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": REMINDER_QUEUE,
+        },
+    )
 
 
 class EmotionalCareEventPublisher:
@@ -44,3 +65,44 @@ class EmotionalCareEventPublisher:
 
     def publish_follow_up_completed(self, follow_up_id: int, consultation_id: int, user_id: str) -> None:
         self.publish(EmotionalCareEvent.follow_up_completed(follow_up_id, consultation_id, user_id))
+
+    def publish_follow_up_reminder(
+        self, follow_up_id: int, consultation_id: int, user_id: str, fire_at: datetime
+    ) -> None:
+        """发布一条延迟提醒：到 fire_at 时刻由死信机制投递给提醒消费者。
+
+        - fire_at 在未来：发到 WAIT_QUEUE，per-message TTL = (fire_at - now)；
+        - fire_at 已过期：直接发到 REMINDER_QUEUE 立即消费。
+        注意：RabbitMQ 只检查队头消息过期，per-message TTL 在队头阻塞时会延迟投递；
+        低频回访场景可接受，高并发可按延迟档位拆多个等待队列。
+        """
+        event = EmotionalCareEvent.follow_up_reminder(follow_up_id, consultation_id, user_id)
+        now = datetime.now(timezone.utc)
+        fire = fire_at if fire_at.tzinfo else fire_at.replace(tzinfo=timezone.utc)
+        ttl_ms = max(0, int((fire - now).total_seconds() * 1000))
+
+        connection = pika.BlockingConnection(self.parameters)
+        try:
+            channel = connection.channel()
+            declare_delay_topology(channel)
+            target_queue = WAIT_QUEUE if ttl_ms > 0 else REMINDER_QUEUE
+            basic_props = {
+                "content_type": "application/json",
+                "delivery_mode": pika.DeliveryMode.Persistent,
+                "message_id": event.event_id,
+                "type": event.event_type,
+            }
+            if ttl_ms > 0:
+                basic_props["expiration"] = str(ttl_ms)
+            channel.basic_publish(
+                exchange="",
+                routing_key=target_queue,
+                body=event.to_bytes(),
+                properties=pika.BasicProperties(**basic_props),
+            )
+            logger.info(
+                "scheduled follow-up reminder follow_up=%s target=%s ttl_ms=%s",
+                follow_up_id, target_queue, ttl_ms,
+            )
+        finally:
+            connection.close()

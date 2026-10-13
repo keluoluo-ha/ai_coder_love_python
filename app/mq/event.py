@@ -14,6 +14,7 @@ class EmotionalCareEvent:
 
     CONSULTATION_COMPLETED = "CONSULTATION_COMPLETED"
     FOLLOW_UP_COMPLETED = "FOLLOW_UP_COMPLETED"
+    FOLLOW_UP_REMINDER = "FOLLOW_UP_REMINDER"
 
     @classmethod
     def consultation_completed(cls, consultation_id: int, user_id: str) -> "EmotionalCareEvent":
@@ -22,6 +23,10 @@ class EmotionalCareEvent:
     @classmethod
     def follow_up_completed(cls, follow_up_id: int, consultation_id: int, user_id: str) -> "EmotionalCareEvent":
         return cls(str(uuid.uuid4()), cls.FOLLOW_UP_COMPLETED, user_id, consultation_id=consultation_id, follow_up_id=follow_up_id)
+
+    @classmethod
+    def follow_up_reminder(cls, follow_up_id: int, consultation_id: int, user_id: str) -> "EmotionalCareEvent":
+        return cls(str(uuid.uuid4()), cls.FOLLOW_UP_REMINDER, user_id, consultation_id=consultation_id, follow_up_id=follow_up_id)
 
     def to_bytes(self) -> bytes:
         return json.dumps(asdict(self), ensure_ascii=False).encode("utf-8")

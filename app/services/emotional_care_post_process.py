@@ -4,6 +4,7 @@ from app.db.models import ConsultationFollowUp, ConsultationRecord
 from app.db.session import SessionLocal
 from app.domain.consultation_effect_evaluator import ConsultationEffectEvaluator
 from app.mq.event import EmotionalCareEvent
+from app.mq.publisher import EmotionalCareEventPublisher
 from app.services.emotion_profile_service import EmotionProfileService
 from app.services.follow_up_service import FollowUpService
 
@@ -18,6 +19,8 @@ class EmotionalCarePostProcessService:
                     self._handle_consultation(db, event, care_copy)
                 elif event.event_type == EmotionalCareEvent.FOLLOW_UP_COMPLETED:
                     self._handle_follow_up(db, event, care_copy)
+                elif event.event_type == EmotionalCareEvent.FOLLOW_UP_REMINDER:
+                    self._handle_reminder(db, event)
                 else:
                     raise ValueError(f"unsupported emotional care event type: {event.event_type}")
                 db.commit()
@@ -64,6 +67,7 @@ class EmotionalCarePostProcessService:
                     record.after_risk_level or "LOW",
                 )
                 created_follow_up.conclusion = care_copy
+                self._schedule_reminder(created_follow_up)
 
     def _handle_follow_up(self, db, event: EmotionalCareEvent, care_copy: str) -> None:
         follow_up = db.get(ConsultationFollowUp, event.follow_up_id)
@@ -87,7 +91,7 @@ class EmotionalCarePostProcessService:
                 ConsultationFollowUp.id > follow_up.id,
             ).first()
             if existing is None:
-                FollowUpService(db).create_for_consultation(
+                next_follow_up = FollowUpService(db).create_for_consultation(
                     follow_up.user_id,
                     follow_up.consultation_id,
                     ConsultationEffectEvaluator.follow_up_type(follow_up.risk_level),
@@ -96,6 +100,33 @@ class EmotionalCarePostProcessService:
                     follow_up.after_emotion_tags,
                     follow_up.risk_level or "LOW",
                 )
+                self._schedule_reminder(next_follow_up)
+
+    def _handle_reminder(self, db, event: EmotionalCareEvent) -> None:
+        """到点提醒：将回访状态从 PENDING 推进到 REMINDED。"""
+        follow_up = db.get(ConsultationFollowUp, event.follow_up_id)
+        if follow_up is None:
+            logger.warning("skip missing follow-up for reminder id=%s", event.follow_up_id)
+            return
+        if follow_up.status == "PENDING":
+            follow_up.status = "REMINDED"
+            logger.info("follow-up %s reminded at %s", follow_up.id, follow_up.planned_at)
+        # TODO: 在此接入真实触达渠道（短信 / 站内信 / push），当前以状态推进作为触达占位
+
+    def _schedule_reminder(self, follow_up: ConsultationFollowUp) -> None:
+        """为新建回访排一条延迟提醒；MQ 不可用时降级（不影响回访本身）。"""
+        if not follow_up.planned_at:
+            logger.warning("follow-up %s has no planned_at, skip reminder", follow_up.id)
+            return
+        try:
+            EmotionalCareEventPublisher().publish_follow_up_reminder(
+                follow_up.id,
+                follow_up.consultation_id,
+                follow_up.user_id,
+                follow_up.planned_at,
+            )
+        except Exception:
+            logger.exception("schedule reminder failed follow_up=%s (best-effort)", follow_up.id)
 
 
 def generate_care_copy(event: EmotionalCareEvent) -> str:

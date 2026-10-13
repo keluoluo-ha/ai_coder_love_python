@@ -6,7 +6,7 @@ import pika
 
 from app.config import RABBITMQ_URL
 from app.mq.event import EmotionalCareEvent
-from app.mq.publisher import QUEUE_NAME
+from app.mq.publisher import QUEUE_NAME, REMINDER_QUEUE, WAIT_QUEUE, declare_delay_topology
 from app.services.emotional_care_post_process import EmotionalCarePostProcessService, generate_care_copy
 
 logger = logging.getLogger(__name__)
@@ -36,9 +36,11 @@ class EmotionalCareEventConsumer:
                 self._connection = pika.BlockingConnection(parameters)
                 channel = self._connection.channel()
                 channel.queue_declare(queue=self.queue_name, durable=True)
+                declare_delay_topology(channel)
                 channel.basic_qos(prefetch_count=1)
                 channel.basic_consume(queue=self.queue_name, on_message_callback=self._on_message, auto_ack=False)
-                logger.info("emotional care consumer started queue=%s", self.queue_name)
+                channel.basic_consume(queue=REMINDER_QUEUE, on_message_callback=self._on_reminder, auto_ack=False)
+                logger.info("emotional care consumer started queues=%s,%s", self.queue_name, REMINDER_QUEUE)
                 channel.start_consuming()
             except Exception:
                 if not self._stopping.is_set():
@@ -57,6 +59,18 @@ class EmotionalCareEventConsumer:
             logger.info("processed emotional care event id=%s copy=%s", event.event_id, care_copy)
         except Exception:
             logger.exception("failed emotional care event delivery_tag=%s", method.delivery_tag)
+            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            return
+        channel.basic_ack(delivery_tag=method.delivery_tag)
+
+    def _on_reminder(self, channel, method, properties, body: bytes) -> None:
+        """到点提醒回调：消息从 WAIT_QUEUE 死信路由到 REMINDER_QUEUE 后触发。"""
+        try:
+            event = EmotionalCareEvent.from_bytes(body)
+            self.post_process.handle(event, "")
+            logger.info("fired follow-up reminder id=%s follow_up=%s", event.event_id, event.follow_up_id)
+        except Exception:
+            logger.exception("failed follow-up reminder delivery_tag=%s", method.delivery_tag)
             channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
             return
         channel.basic_ack(delivery_tag=method.delivery_tag)
