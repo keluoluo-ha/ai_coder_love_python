@@ -1,0 +1,202 @@
+[
+  {
+    "id": "A-01",
+    "question": "长辈和我生活习惯差很多，经常起摩擦，怎么缓和？",
+    "status": "已婚",
+    "topic": "A-语义模糊",
+    "goldKeywords": ["伴侣家人", "婆媳产生矛盾", "寻求伴侣帮助"],
+    "minKeywordMatches": 1
+  },
+  {
+    "id": "A-02",
+    "question": "想一起攒钱做件事，但想法总不一致，怎么谈？",
+    "status": "恋爱",
+    "topic": "A-语义模糊",
+    "goldKeywords": ["攒钱买房", "共同目标", "阶段性计划"],
+    "minKeywordMatches": 1
+  },
+  {
+    "id": "A-03",
+    "question": "总觉得自己不够好，不敢主动认识新人，怎么办？",
+    "status": "单身",
+    "topic": "A-语义模糊",
+    "goldKeywords": ["焦虑情绪", "丰富自己的生活", "摄影爱好"],
+    "minKeywordMatches": 1
+  },
+  {
+    "id": "A-04",
+    "question": "对方总熬夜打游戏，影响相处，怎么开口说？",
+    "status": "恋爱",
+    "topic": "A-语义模糊",
+    "goldKeywords": ["熬夜打游戏", "作息时间表", "关心的口吻"],
+    "minKeywordMatches": 1
+  },
+  {
+    "id": "A-05",
+    "question": "工作日晚上总加班，家里人有意见，怎么协调？",
+    "status": "已婚",
+    "topic": "A-语义模糊",
+    "goldKeywords": ["工作日晚上", "家务分工", "减少不必要加班"],
+    "minKeywordMatches": 1
+  },
+  {
+    "id": "B-01",
+    "question": "在网上认识新人，资料、聊天和隐私分别要注意什么？",
+    "status": "单身",
+    "topic": "B-多关键词",
+    "goldKeywords": ["个人资料", "保护个人隐私", "聊天频率"],
+    "minKeywordMatches": 2
+  },
+  {
+    "id": "B-02",
+    "question": "第一次见面想判断值不值得继续，重点观察哪些方面？",
+    "status": "单身",
+    "topic": "B-多关键词",
+    "goldKeywords": ["相亲对象", "情绪稳定性", "人生规划"],
+    "minKeywordMatches": 2
+  },
+  {
+    "id": "B-03",
+    "question": "争执之后不想越吵越凶，沟通时有哪些具体做法？",
+    "status": "恋爱",
+    "topic": "B-多关键词",
+    "goldKeywords": ["冷静情绪", "我觉得", "沟通方式"],
+    "minKeywordMatches": 2
+  },
+  {
+    "id": "B-04",
+    "question": "想准备一个有记忆点的安排，书籍、约会和布置可以怎么组合？",
+    "status": "恋爱",
+    "topic": "B-多关键词",
+    "goldKeywords": ["限量版书籍", "星空露营", "手写情书"],
+    "minKeywordMatches": 2
+  },
+  {
+    "id": "B-05",
+    "question": "日常开销、储蓄和大额支出，怎样一起定规则？",
+    "status": "已婚",
+    "topic": "B-多关键词",
+    "goldKeywords": ["家庭预算", "共同储蓄目标", "开诚布公"],
+    "minKeywordMatches": 2
+  },
+  {
+    "id": "C-01",
+    "question": "怎么脱单？",
+    "status": "单身",
+    "topic": "C-短query",
+    "goldKeywords": ["线上交友", "脱单"],
+    "minKeywordMatches": 1
+  },
+  {
+    "id": "C-02",
+    "question": "老吵架咋办",
+    "status": "恋爱",
+    "topic": "C-短query",
+    "goldKeywords": ["冷静情绪", "真诚倾听"],
+    "minKeywordMatches": 1
+  },
+  {
+    "id": "C-03",
+    "question": "怎么准备惊喜",
+    "status": "恋爱",
+    "topic": "C-短query",
+    "goldKeywords": ["浪漫惊喜", "特别约会"],
+    "minKeywordMatches": 1
+  },
+  {
+    "id": "C-04",
+    "question": "家务谁做",
+    "status": "已婚",
+    "topic": "C-短query",
+    "goldKeywords": ["家务分工", "各自擅长"],
+    "minKeywordMatches": 1
+  },
+  {
+    "id": "C-05",
+    "question": "钱怎么管",
+    "status": "已婚",
+    "topic": "C-短query",
+    "goldKeywords": ["家庭预算", "理财规划"],
+    "minKeywordMatches": 1
+  },
+  {
+    "id": "D-01",
+    "question": "怎么规划个人未来？",
+    "status": "单身",
+    "topic": "D-HardNegative",
+    "goldKeywords": ["相亲对象", "人生规划", "深入发展"],
+    "minKeywordMatches": 1
+  },
+  {
+    "id": "D-02",
+    "question": "怎么保持独立又不疏远彼此？",
+    "status": "恋爱",
+    "topic": "D-HardNegative",
+    "goldKeywords": ["独立兴趣爱好", "社交圈子", "舞蹈爱好"],
+    "minKeywordMatches": 2
+  },
+  {
+    "id": "D-03",
+    "question": "怎么聊以后的打算？",
+    "status": "恋爱",
+    "topic": "D-HardNegative",
+    "goldKeywords": ["未来规划", "共同目标", "攒钱买房"],
+    "minKeywordMatches": 2
+  },
+  {
+    "id": "D-04",
+    "question": "怎么让关系一直有温度？",
+    "status": "已婚",
+    "topic": "D-HardNegative",
+    "goldKeywords": ["二人世界", "身体亲密接触", "每周一次"],
+    "minKeywordMatches": 2
+  },
+  {
+    "id": "D-05",
+    "question": "和家里人意见不合，怎么调解？",
+    "status": "已婚",
+    "topic": "D-HardNegative",
+    "goldKeywords": ["伴侣家人", "婆媳产生矛盾", "中间协调"],
+    "minKeywordMatches": 2
+  },
+  {
+    "id": "E-01",
+    "question": "网上认识了人，聊天咋聊比较稳？",
+    "status": "单身",
+    "topic": "E-口语噪声",
+    "goldKeywords": ["线上交友", "聊天初期", "个人资料"],
+    "minKeywordMatches": 1
+  },
+  {
+    "id": "E-02",
+    "question": "社恐不敢跟心仪的人搭话，有啥招",
+    "status": "单身",
+    "topic": "E-口语噪声",
+    "goldKeywords": ["社交场合", "主动寻找话题", "交换联系方式"],
+    "minKeywordMatches": 2
+  },
+  {
+    "id": "E-03",
+    "question": "ta老玩手机不理我，咋说比较好",
+    "status": "恋爱",
+    "topic": "E-口语噪声",
+    "goldKeywords": ["熬夜打游戏", "相处时间", "关心的口吻"],
+    "minKeywordMatches": 2
+  },
+  {
+    "id": "E-04",
+    "question": "想搞点仪式感 surprise 怎么弄",
+    "status": "恋爱",
+    "topic": "E-口语噪声",
+    "goldKeywords": ["浪漫惊喜", "主题派对", "星空露营"],
+    "minKeywordMatches": 2
+  },
+  {
+    "id": "E-05",
+    "question": "下班就想躺平，家里人说我不管事555",
+    "status": "已婚",
+    "topic": "E-口语噪声",
+    "goldKeywords": ["陪伴家人", "家务分工", "日程表"],
+    "minKeywordMatches": 2
+  }
+]

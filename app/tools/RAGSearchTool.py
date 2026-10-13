@@ -1,8 +1,10 @@
 from pydantic import BaseModel, Field
 
-from app.rag.query_expander import QueryExpander
-from app.rag.query_rewriter import QueryRewriter
-from app.rag.vector_store import get_vector_store
+from langchain_classic.retrievers import MultiQueryRetriever
+from langchain_community.chat_models import ChatTongyi
+
+from app.config import LLM_MODEL_NAME
+from app.rag.love_rag import get_love_vector_store
 from app.tools.base_tool import BaseTool
 
 
@@ -12,12 +14,18 @@ class RAGSearchInput(BaseModel):
 
 class RAGSearchTool(BaseTool):
     name: str = "knowledge_base"
-    description: str = "搜索内部知识库，查询产品FAQ、退换货政策、价格方案、技术支持、账号安全等官方文档内容"
-    parameters: type[BaseModel] = RAGSearchInput
+    description: str = "搜索恋爱知识库，查询单身脱单、恋爱相处、已婚经营等情感指导内容"
+    args_schema: type[BaseModel] = RAGSearchInput
 
-    async def execute(self, query: str) -> str:
-        vector_store = get_vector_store()
-        expanded = QueryExpander().expand(query, max_queries=4)
-        rewritten = QueryRewriter().rewrite_many(expanded)
-        results = QueryRewriter.multi_query_search(rewritten, vector_store, k=3)
+    def _run(self, query: str) -> str:
+        vector_store = get_love_vector_store()
+        retriever = MultiQueryRetriever.from_llm(
+            retriever=vector_store.as_retriever(search_kwargs={"k": 3}),
+            llm=ChatTongyi(model=LLM_MODEL_NAME, temperature=0),
+            include_original=True,
+        )
+        results = retriever.invoke(query)[:3]
         return "\n---\n".join(document.page_content for document in results)
+
+    async def _arun(self, query: str) -> str:
+        return self._run(query)
